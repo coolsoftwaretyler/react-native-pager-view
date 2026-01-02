@@ -2,6 +2,7 @@ package com.reactnativepagerview
 
 import android.view.View
 import android.view.ViewGroup
+import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
 import com.facebook.react.uimanager.PixelUtil
 import android.os.Handler
@@ -57,6 +58,11 @@ object PagerViewViewManagerImpl {
 
     fun removeView(parent: NestedScrollableHost, view: View) {
         val pager = getViewPager(parent)
+        val recyclerView = pager.getChildAt(0) as? RecyclerView
+
+        // Stop scroll before any removal to prevent recycling crashes
+        recyclerView?.stopScroll()
+
         (pager.adapter as ViewPagerAdapter?)?.removeChild(view)
 
         // Required so ViewPager actually animates the removed view right away (otherwise
@@ -68,13 +74,27 @@ object PagerViewViewManagerImpl {
     fun removeAllViews(parent: NestedScrollableHost) {
         val pager = getViewPager(parent)
         pager.isUserInputEnabled = false
-        val adapter = pager.adapter as ViewPagerAdapter?
-        adapter?.removeAll()
+        val recyclerView = pager.getChildAt(0) as? RecyclerView
+
+        // Stop any scroll/drag in progress to prevent RecyclerView recycling crashes
+        recyclerView?.stopScroll()
+
+        // Cancel any pending layout refresh callbacks
+        refreshFrameCallback?.let { Choreographer.getInstance().removeFrameCallback(it) }
+        refreshFrameCallback = null
+
+        // Clear adapter instead of calling removeAll() to avoid notifyItemRangeRemoved
+        // which can crash if RecyclerView is mid-scroll/layout
+        pager.adapter = null
     }
 
     fun removeViewAt(parent: NestedScrollableHost, index: Int) {
         val pager = getViewPager(parent)
+        val recyclerView = pager.getChildAt(0) as? RecyclerView
         val adapter = pager.adapter as ViewPagerAdapter?
+
+        // Stop scroll before any removal to prevent recycling crashes
+        recyclerView?.stopScroll()
 
         val child = adapter?.getChildAt(index)
 
@@ -89,6 +109,13 @@ object PagerViewViewManagerImpl {
 
     fun needsCustomLayoutForChildren(): Boolean {
         return true
+    }
+
+    fun cancelPendingRefreshCallback() {
+        refreshFrameCallback?.let {
+            Choreographer.getInstance().removeFrameCallback(it)
+        }
+        refreshFrameCallback = null
     }
 
     fun setScrollEnabled(host: NestedScrollableHost, value: Boolean) {
