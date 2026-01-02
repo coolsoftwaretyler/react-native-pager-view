@@ -2,6 +2,7 @@ package com.reactnativepagerview
 
 import android.view.View
 import android.view.ViewGroup
+import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
 import androidx.viewpager2.widget.ViewPager2.OnPageChangeCallback
 import com.facebook.infer.annotation.Assertions
@@ -86,6 +87,19 @@ class PagerViewViewManager : ViewGroupManager<NestedScrollableHost>(), RNCViewPa
         }
         host.addView(vp)
         return host
+    }
+
+    override fun onDropViewInstance(view: NestedScrollableHost) {
+        try {
+            val viewPager = PagerViewViewManagerImpl.getViewPager(view)
+            // Stop any scroll/drag in progress
+            (viewPager.getChildAt(0) as? RecyclerView)?.stopScroll()
+            // Clear adapter to prevent RecyclerView from trying to recycle during teardown
+            viewPager.adapter = null
+        } catch (e: Exception) {
+            // View might already be in an invalid state
+        }
+        super.onDropViewInstance(view)
     }
 
     override fun addView(host: NestedScrollableHost, child: View, index: Int) {
